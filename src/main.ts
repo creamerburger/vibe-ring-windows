@@ -24,22 +24,54 @@ const enum State {
 
 const DEBUG = process.env.DEBUG_RINGCON === "1";
 
-async function main() {
-  console.log("Looking for Joy-Con (R)...");
-  const joycon = JoyCon.find();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+async function findJoyConWithRetry(): Promise<JoyCon> {
+  let logged = false;
+  while (true) {
+    try {
+      return JoyCon.find();
+    } catch (err) {
+      if (!logged) {
+        console.log("Waiting for Joy-Con (R) to connect...");
+        logged = true;
+      }
+      await sleep(2000);
+    }
+  }
+}
+
+async function main() {
   const keyboard = new Keyboard();
+  let joycon: JoyCon | null = null;
 
   const cleanup = () => {
     console.log("\nShutting down...");
     keyboard.fnUp(); // ensure Fn is released before exit
     keyboard.close();
-    joycon.close();
+    try { joycon?.close(); } catch {}
     process.exit(0);
   };
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
 
+  while (true) {
+    console.log("Looking for Joy-Con (R)...");
+    joycon = await findJoyConWithRetry();
+    try {
+      await runSession(joycon, keyboard);
+    } catch (err: any) {
+      console.error(`Session ended: ${err?.message ?? err}`);
+    }
+    keyboard.fnUp();
+    try { joycon.close(); } catch {}
+    joycon = null;
+    console.log("Disconnected. Reconnecting in 2s...");
+    await sleep(2000);
+  }
+}
+
+async function runSession(joycon: JoyCon, keyboard: Keyboard) {
   await initRingCon(joycon);
 
   console.log("Ring-Con ready! Listening for input...");
@@ -52,7 +84,12 @@ async function main() {
   let lastDebugPrint = 0;
 
   while (true) {
-    const report = joycon.read(64);
+    let report: Buffer | null;
+    try {
+      report = joycon.read(64);
+    } catch (err: any) {
+      throw new Error(`read failed: ${err?.message ?? err}`);
+    }
     if (!report) continue;
     if (report[0] !== 0x30 || report.length < 48) continue;
 
@@ -111,4 +148,11 @@ async function main() {
 main().catch((err) => {
   console.error("Fatal:", err.message);
   process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err?.message ?? err);
+});
+process.on("unhandledRejection", (err: any) => {
+  console.error("unhandledRejection:", err?.message ?? err);
 });
