@@ -1,0 +1,28 @@
+{
+  "name": "vibe-ring",
+  "version": "1.0.0",
+  "description": "Ring-Con to macOS keyboard controller",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "build:helper": "swiftc -O -o src/keyboard-helper src/keyboard-helper.swift"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.32.1",
+  "dependencies": {
+    "node-hid": "^3.1.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "node-hid",
+      "esbuild"
+    ]
+  }
+}
