@@ -1,5 +1,5 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,7 +11,10 @@ const VK_FUNCTION = 63; // kVK_Function
 const VK_RETURN = 36; // kVK_Return
 
 function ensureCompiled() {
-  if (!existsSync(BINARY)) {
+  const needsCompile = !existsSync(BINARY)
+    || statSync(SWIFT_SRC).mtimeMs > statSync(BINARY).mtimeMs;
+
+  if (needsCompile) {
     console.log("Compiling keyboard helper...");
     execSync(`swiftc -O -o "${BINARY}" "${SWIFT_SRC}"`, { stdio: "inherit" });
     console.log("Keyboard helper compiled.");

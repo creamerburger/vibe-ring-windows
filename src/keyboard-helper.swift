@@ -6,10 +6,22 @@ import Foundation
 //   "key_up <keycode>"     — release key
 //   "key_tap <keycode>"    — press + release key
 
+let eventSource = CGEventSource(stateID: .privateState)
+let functionKey = CGKeyCode(63)
+
 func simulateKey(keyCode: CGKeyCode, down: Bool) {
-    guard let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: down) else {
+    guard let eventSource,
+          let event = CGEvent(keyboardEventSource: eventSource, virtualKey: keyCode, keyDown: down) else {
         return
     }
+
+    // For non-modifier keys, explicitly clear flags so the synthetic event
+    // cannot accidentally inherit Command/Control/Option/Shift state from the
+    // current session.
+    if keyCode != functionKey {
+        event.flags = []
+    }
+
     event.post(tap: .cghidEventTap)
 }
 
