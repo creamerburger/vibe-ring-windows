@@ -10,10 +10,10 @@ import { Keyboard } from "./keyboard.js";
 //   Rest:    ~2380
 //   Squeeze: 3800+
 //   Pull:    1400-
-const SQUEEZE_THRESHOLD = 3000; // flex > this → squeezing
-const SQUEEZE_RELEASE = 2700;   // flex < this → release (hysteresis)
-const PULL_THRESHOLD = 1800;    // flex < this → pulling outward
-const PULL_RELEASE = 2100;      // flex > this → stop pull
+const SQUEEZE_THRESHOLD = 4000; // flex > this → squeezing
+const SQUEEZE_RELEASE = 3600;   // flex < this → release (hysteresis)
+const PULL_THRESHOLD = 2000;    // flex < this → pulling outward
+const PULL_RELEASE = 2500;      // flex > this → stop pull
 const MAX_PULL_DURATION = 500;  // ms — pulls longer than this are ignored
 
 const enum State {
@@ -66,8 +66,8 @@ async function main() {
     keyboard.fnUp();
     try { joycon.close(); } catch {}
     joycon = null;
-    console.log("Disconnected. Reconnecting in 2s...");
-    await sleep(2000);
+    console.log("Disconnected. Reconnecting in 5s...");
+    await sleep(5000);
   }
 }
 
@@ -75,22 +75,26 @@ async function runSession(joycon: JoyCon, keyboard: Keyboard) {
   await initRingCon(joycon);
 
   console.log("Ring-Con ready! Listening for input...");
-  console.log("  Squeeze → Fn (hold)");
-  console.log("  Pull outward (short) → Enter");
+  console.log("  Squeeze → Space (hold) [voice record]");
+  console.log("  Pull outward (short) → Enter [send]");
   console.log("  Ctrl+C to quit\n");
 
   let state: State = State.IDLE;
   let pullStart = 0;
   let lastDebugPrint = 0;
+  let zeroFlexCount = 0;
 
   while (true) {
     let report: Buffer | null;
     try {
-      report = joycon.read(64);
+      report = joycon.read(0);
     } catch (err: any) {
       throw new Error(`read failed: ${err?.message ?? err}`);
     }
-    if (!report) continue;
+    if (!report) {
+      await sleep(1); // yield to event loop for UDP send callbacks
+      continue;
+    }
     if (report[0] !== 0x30 || report.length < 48) continue;
 
     // Ring-Con flex value: int16 LE at bytes 39-40 (Frame 3 accel_y slot,
@@ -100,11 +104,21 @@ async function runSession(joycon: JoyCon, keyboard: Keyboard) {
     if (DEBUG) {
       const now = Date.now();
       if (now - lastDebugPrint > 200) {
-        console.log(`flex=${flex} state=${state}`);
+        const hex = [...report.slice(35, 45)].map(b => b.toString(16).padStart(2, '0')).join(' ');
+        console.log(`flex=${flex} bytes[35-44]=${hex}`);
         lastDebugPrint = now;
       }
       continue;
     }
+
+    // flex=0 means Ring-Con MCU hasn't started sending valid data yet
+    if (flex === 0) {
+      if (++zeroFlexCount > 300) {
+        throw new Error("Ring-Con MCU not sending data — reinitializing");
+      }
+      continue;
+    }
+    zeroFlexCount = 0;
 
     switch (state) {
       case State.IDLE:

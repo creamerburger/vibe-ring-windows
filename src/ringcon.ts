@@ -56,6 +56,15 @@ const isSubcmdReply = (r: Buffer, subcmd: number) =>
 export async function initRingCon(joycon: JoyCon): Promise<void> {
   console.log("Initializing Ring-Con...");
 
+  // Reset MCU to Suspend state first — clears any leftover state from prior failed inits
+  console.log("  [reset] MCU → Suspend");
+  try {
+    joycon.sendSubcommand(0x22, [MCU_MODE_SUSPEND]);
+    await sleep(200);
+    joycon.sendSubcommand(0x22, [MCU_MODE_SUSPEND]);
+    await sleep(500);
+  } catch {}
+
   // Step 1: Enable vibration
   await sendAndCheck(
     joycon,
@@ -88,8 +97,8 @@ export async function initRingCon(joycon: JoyCon): Promise<void> {
     (r) => isSubcmdReply(r, 0x22)
   );
 
-  // MCU firmware needs time to come up
-  await sleep(800);
+  // MCU firmware needs time to come up (extra time for Bluetooth latency on Windows)
+  await sleep(1500);
 
   // Step 5: Set MCU mode to MaybeRingcon. The MCU state byte shows up at
   // byte 22 of the subcommand reply; loop until the transition is observed.
@@ -100,6 +109,9 @@ export async function initRingCon(joycon: JoyCon): Promise<void> {
     (r) => isSubcmdReply(r, 0x21) && r[22] === MCU_MODE_MAYBE_RINGCON,
     16
   );
+
+  // Give MCU time to switch mode and detect Ring-Con on the rail
+  await sleep(800);
 
   // Step 6: Configure MCU IR with IRSensorSleep mode
   // Payload: [ir_mode=1, no_of_frags=0, fw_major_lo, fw_major_hi, fw_minor_lo, fw_minor_hi]
@@ -117,15 +129,17 @@ export async function initRingCon(joycon: JoyCon): Promise<void> {
     16
   );
 
-  await sleep(200);
+  // Wait for Ring-Con peripheral to be recognized after IR sleep config
+  await sleep(1000);
 
   // Step 7: Get external device info (subcmd 0x59)
+  // This asks the Ring-Con MCU to identify itself — needs Ring-Con on rail + MCU settled
   await sendAndCheck(
     joycon,
     "Get external device info (0x59)",
     () => joycon.sendSubcommand(0x59, []),
     (r) => isSubcmdReply(r, 0x59),
-    16
+    32
   );
 
   // Step 8: Enable IMU in MaybeRingcon mode
