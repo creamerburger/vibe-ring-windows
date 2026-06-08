@@ -1,7 +1,7 @@
 {
   "name": "vibe-ring",
   "version": "1.0.0",
-  "description": "Ring-Con to macOS keyboard controller",
+  "description": "닌텐도 링콘을 Windows 키보드 입력으로 매핑 (Claude Code 보이스 모드용)",
   "type": "module",
   "scripts": {
     "start": "tsx src/main.ts",

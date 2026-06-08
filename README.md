@@ -1,5 +1,7 @@
 # Vibe Ring (Windows)
 
+[한국어](README_KO.md)
+
 Map Nintendo Ring Fit's Ring-Con to keyboard inputs on Windows — designed for use with Claude Code's `/voice` mode.
 
 - **Squeeze** Ring-Con → Hold **Space** (held while squeezed, released when let go)
